@@ -5,7 +5,7 @@ if (Meteor.isClient) {
 
 /*PART I: SESSION ID GENERATION ----------------------------------------------------------------------------------------------------------*/
  /*Check if you can put this anywhere else, it looks shit over here.*/
- Template.list.sessID_Gen = function(){
+ /*Template.list.sessID_Gen = function(){
     var text = "";
     var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -13,7 +13,24 @@ if (Meteor.isClient) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
 
     return text;	
- } 
+ } */
+
+Template.list.sessID_Gen = function(){
+	//need to get id from server
+	var count;
+	//Meteor.call('get_count', function(err,message){
+//alert(err);
+	//count = message;
+	//alert("message: "+message);
+	//alert("error: "+err);
+//});
+	//alert("this is count: "+count);
+	var id = (30).toString(30);
+	var filler = "00000";
+	var output = [filler.slice(0,5-id.length),id].join('');
+	//alert(output);
+	return output;
+}
 
 //The Router after event callback overrides the following line, such that each link is now a mixtape.
 Template.list.my_playlist_id = Template.list.sessID_Gen();
@@ -35,8 +52,47 @@ Template.list.search_get= function(str,val){
 			val = val+1;
 		}
 	    }
-            Links.insert({sess:Template.list.my_playlist_id,song_title:str.items[val].snippet.title,videoId:str.items[val].id.videoId,thumbnail:str.items[val].snippet.thumbnails.medium.url,index:val});
-    });
+           //Links.insert({sess:Template.list.my_playlist_id,song_title:str.items[val].snippet.title,videoId:str.items[val].id.videoId,thumbnail:str.items[val].snippet.thumbnails.medium.url,index:val});
+
+	/*Links.insert({sess: Template.list.my_playlist_id}, {
+	$push: {
+			Track:{
+				song_title:str.items[val].snippet.title,
+				video_id:str.items[val].id.videoId,
+				thumbnail:str.items[val].snippet.thumbnails,
+				index:val
+			}
+		}
+	});*/
+	//Links.insert({sess: Template.list.my_playlist_id, $push: {shit:"slit"}});
+	if(!Links.findOne({sess: Template.list.my_playlist_id})){
+		Links.insert({sess: Template.list.my_playlist_id});
+	}
+
+	var song = new Object();	
+	song["title"] = str.items[val].snippet.title;
+	song["video_id"] = str.items[val].id.videoId;
+	song["thumbnail"] = str.items[val].snippet.thumbnails;
+	song["index"] = val;
+	console.log("title: "+song["title"]);
+	console.log("about to update");
+	//Links.update({_id: Links.findOne({sess: Template.list.my_playlist_id})._id, $push: {shit: "real_shit"}});
+	Meteor.call('update_record',Template.list.my_playlist_id, song, function(err,message){
+//alert(err);
+});
+	//Meteor.call('upd',Template.list.my_playlist_id,"hate",function (error,result){alert(error);alert(result);});
+	//alert("balls");
+	/*session = Links.findOne({sess:Template.list.my_playlist_id});
+	if(session){
+		session.sublist = session.sublist || [];
+		session.sublist.push("tits");
+		//alert(session.sublist);
+		Links.update(session,sublist);
+		//alert("yay");
+	}*/
+	
+	//console.log(Links);
+   });
 }
 
 /*Update List on generate button*/
@@ -113,6 +169,7 @@ Template.player.created = function(){
 		Session.set("to_delete",this._id);	
 		$("#"+Session.get("to_delete")).fadeOut('slow',function(){
 			Links.remove(Session.get("to_delete"));
+			//Links.update({
 		});
 	}
   });
@@ -127,7 +184,11 @@ Template.player.created = function(){
   
   Template.list.my_playlist = function(){
 	//After the deep copy in the routing part of the code, the JQuery will not be relevant.
-	return Links.find();
+	//return Links.find();
+	//return Links.find();
+	return Links.findOne({sess: Template.list.my_playlist_id}).songs;
+	//return Links.find();
+	//return Links.find().songs;
   }
   
   Template.player.nav_playlist = function(){
@@ -191,9 +252,21 @@ if (Meteor.isServer) {
   Meteor.startup(function () {
     // code to run on server at startup
     Meteor.publish("links", function(sess_var) {
-      return Links.find({sess:sess_var});  //each client will only have links with that _lastSessionId
+      //return Links.findOne({sess:sess_var});  //each client will only have links with that _lastSessionId
+	return Links.find();
     });
   });
 
+
+(function () {
+Meteor.methods({
+	update_record: function(sessID, songObj){
+		Links.update({sess: sessID}, {$push: {songs: {song_title: songObj["title"], videoId: songObj["video_id"], thumbnail: songObj["thumbnail"]}}});
+	},
+	get_count: function(){
+		return Links.find().count();
+	}
+});
+}());
   
 }//End of Server
