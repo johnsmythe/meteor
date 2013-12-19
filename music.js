@@ -5,35 +5,27 @@ if (Meteor.isClient) {
 
 /*PART I: SESSION ID GENERATION ----------------------------------------------------------------------------------------------------------*/
  /*Check if you can put this anywhere else, it looks shit over here.*/
- /*Template.list.sessID_Gen = function(){
-    var text = "";
-    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-    for( var i=0; i < 5; i++ )
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-
-    return text;	
- } */
 
 Template.list.sessID_Gen = function(){
 	//need to get id from server
-	var count;
-	//Meteor.call('get_count', function(err,message){
-//alert(err);
-	//count = message;
-	//alert("message: "+message);
-	//alert("error: "+err);
-//});
-	//alert("this is count: "+count);
-	var id = (30).toString(30);
-	var filler = "00000";
-	var output = [filler.slice(0,5-id.length),id].join('');
-	//alert(output);
-	return output;
+
+	Meteor.call('get_count', function(err,message){
+	//alert(err);
+		console.log("this is count: "+message);
+		var id = (message).toString(30);
+		var filler = "00000";
+		Template.list.my_playlist_id = [filler.slice(0,5-id.length),id].join('');
+		console.log("sessID: "+Template.list.my_playlist_id);
+	});
 }
 
 //The Router after event callback overrides the following line, such that each link is now a mixtape.
-Template.list.my_playlist_id = Template.list.sessID_Gen();
+
+
+Meteor.startup(function (){
+	Template.list.sessID_Gen();	//generate sessionID on pageload
+});
+
 
 /*PART II: YOUTUBE API AND CONTROL FUNCTIONS -----------------------------------------------------------------------------------------------*/
 
@@ -54,18 +46,11 @@ Template.list.search_get= function(str,val){
 	    }
            //Links.insert({sess:Template.list.my_playlist_id,song_title:str.items[val].snippet.title,videoId:str.items[val].id.videoId,thumbnail:str.items[val].snippet.thumbnails.medium.url,index:val});
 
-	/*Links.insert({sess: Template.list.my_playlist_id}, {
-	$push: {
-			Track:{
-				song_title:str.items[val].snippet.title,
-				video_id:str.items[val].id.videoId,
-				thumbnail:str.items[val].snippet.thumbnails,
-				index:val
-			}
-		}
-	});*/
+	//make a call to the db right now
+
 	//Links.insert({sess: Template.list.my_playlist_id, $push: {shit:"slit"}});
 	if(!Links.findOne({sess: Template.list.my_playlist_id})){
+		console.log("im inserting a new record with sess id: "+Template.list.my_playlist_id);
 		Links.insert({sess: Template.list.my_playlist_id});
 	}
 
@@ -78,18 +63,8 @@ Template.list.search_get= function(str,val){
 	console.log("about to update");
 	//Links.update({_id: Links.findOne({sess: Template.list.my_playlist_id})._id, $push: {shit: "real_shit"}});
 	Meteor.call('update_record',Template.list.my_playlist_id, song, function(err,message){
-//alert(err);
-});
-	//Meteor.call('upd',Template.list.my_playlist_id,"hate",function (error,result){alert(error);alert(result);});
-	//alert("balls");
-	/*session = Links.findOne({sess:Template.list.my_playlist_id});
-	if(session){
-		session.sublist = session.sublist || [];
-		session.sublist.push("tits");
-		//alert(session.sublist);
-		Links.update(session,sublist);
-		//alert("yay");
-	}*/
+	//alert(err);
+	});
 	
 	//console.log(Links);
    });
@@ -100,7 +75,7 @@ Template.list.updateList = function(){
 	var ret = [];
         $( "#playlist .list_element" ).each(function() {
 	if($(this).is(':visible')){
-		ret.push(   Links.findOne({_id:$(this).attr('id')})   );
+		ret.push(Links.findOne({_id:$(this).attr('id')}));
          }
 	});
 
@@ -124,16 +99,19 @@ Router.map(function () {
   this.route('tape', {
     path: '/tape/:_sess',
     before: function(){
+	 console.log("subscribing to sess inside route: " + this.params._sess);
 	this.subscribe('links',this.params._sess);
     },
     after: function(){
 	Template.list.my_playlist_id = this.params._sess;
+	console.log("after my sessid is " + Template.list.my_playlist_id);
     }
   });
 });
 
  //Renew subscription on state change.
- Meteor.subscribe( "links", Template.list.my_playlist_id);
+ console.log("subscribing to sess: " + Template.list.my_playlist_id);
+ Meteor.subscribe("links", Template.list.my_playlist_id);
 
 /*PART III - EVENT HANDLERS AND REACTIONS BELOW-----------------------------------------------------------------------------------------------*/
 
@@ -159,7 +137,7 @@ Template.player.created = function(){
                 var url = template.find('#query').value;
                 $("#query").val('');
 		$('#playlist_container').animate({scrollTop: $('#playlist_container')[0].scrollHeight});
-		Template.list.search_get(url,0);
+		Template.list.search_get(url,0);	//insert records into the database
                 }
        }
   });
@@ -185,8 +163,9 @@ Template.player.created = function(){
   Template.list.my_playlist = function(){
 	//After the deep copy in the routing part of the code, the JQuery will not be relevant.
 	//return Links.find();
+	return Links.find();
+	//return Links.findOne({sess: Template.list.my_playlist_id}).songs;
 	//return Links.find();
-	return Links.findOne({sess: Template.list.my_playlist_id}).songs;
 	//return Links.find();
 	//return Links.find().songs;
   }
@@ -252,10 +231,13 @@ if (Meteor.isServer) {
   Meteor.startup(function () {
     // code to run on server at startup
     Meteor.publish("links", function(sess_var) {
-      //return Links.findOne({sess:sess_var});  //each client will only have links with that _lastSessionId
-	return Links.find();
+     //console.log("publishing");
+      return Links.findOne({sess:sess_var});  //each client will only have links with that _lastSessionId
+	//return Links.find();
+	
     });
-  });
+  
+});
 
 
 (function () {

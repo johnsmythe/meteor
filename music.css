@@ -171,5 +171,7 @@ body {
 
 .element_style{
     /*Change Ubuntu font. Need something plain, but retro, with character. Like Museo 100*/
-    font-family: 'Ubuntu';
+    /*font-family: 'Ubuntu';*/
+    font-family:"Times New Roman";
     font-size:20px;
+}
