@@ -16,6 +16,7 @@ Template.list.sessID_Gen = function(){
 		var filler = "00000";
 		Template.list.my_playlist_id = [filler.slice(0,5-id.length),id].join('');
 		console.log("sessID: "+Template.list.my_playlist_id);
+		Meteor.subscribe("links", Template.list.my_playlist_id);
 	});
 }
 
@@ -44,11 +45,9 @@ Template.list.search_get= function(str,val){
 			val = val+1;
 		}
 	    }
-           //Links.insert({sess:Template.list.my_playlist_id,song_title:str.items[val].snippet.title,videoId:str.items[val].id.videoId,thumbnail:str.items[val].snippet.thumbnails.medium.url,index:val});
 
 	//make a call to the db right now
 
-	//Links.insert({sess: Template.list.my_playlist_id, $push: {shit:"slit"}});
 	if(!Links.findOne({sess: Template.list.my_playlist_id})){
 		console.log("im inserting a new record with sess id: "+Template.list.my_playlist_id);
 		Links.insert({sess: Template.list.my_playlist_id});
@@ -58,12 +57,13 @@ Template.list.search_get= function(str,val){
 	song["title"] = str.items[val].snippet.title;
 	song["video_id"] = str.items[val].id.videoId;
 	song["thumbnail"] = str.items[val].snippet.thumbnails;
-	song["index"] = val;
+	//song["index"] = val;
+	song["index"] = new Meteor.Collection.ObjectID().toHexString();	//this is unique every time
 	console.log("title: "+song["title"]);
+	console.log("index: "+song["index"]);
 	console.log("about to update");
-	//Links.update({_id: Links.findOne({sess: Template.list.my_playlist_id})._id, $push: {shit: "real_shit"}});
 	Meteor.call('update_record',Template.list.my_playlist_id, song, function(err,message){
-	//alert(err);
+		//alert(err);
 	});
 	
 	//console.log(Links);
@@ -72,15 +72,31 @@ Template.list.search_get= function(str,val){
 
 /*Update List on generate button*/
 Template.list.updateList = function(){
+	console.log("update list being called");
 	var ret = [];
         $( "#playlist .list_element" ).each(function() {
 	if($(this).is(':visible')){
-		ret.push(Links.findOne({_id:$(this).attr('id')}));
+		//ret.push(Links.findOne({_id:$(this).attr('id')}));
+		var songs= Links.find({sess: Template.list.my_playlist_id},{songs: {$elemMatch: {index: $(this).attr('id')}}}).fetch()[0].songs;
+		//console.log("songs "+songs);
+		for (var song in songs){
+			console.log("hello this is: "+songs[song].index);
+			if(songs[song].index == $(this).attr('id')){
+				console.log("pushing this song "+songs[song].song_title);
+				ret.push(songs[song]);
+				break;
+			}
+		}
+		//var songname = Links.find({sess: Template.list.my_playlist_id},{songs: {$elemMatch: {index: $(this).attr('id')}}}).fetch()[0].songs[0].song_title;
+		//console.log("pushing song name: "+songname);
+		//ret.push(songname);
          }
 	});
 
 	var urls = [];
+	console.log("length of ret " + ret.length);
 	for (var i = 0; i < ret.length; i++){
+		console.log("current video url: "+ret[i].videoId);
 		urls[i] = ret[i].videoId;
 	}
 
@@ -110,13 +126,17 @@ Router.map(function () {
 });
 
  //Renew subscription on state change.
- console.log("subscribing to sess: " + Template.list.my_playlist_id);
+
+/* console.log("subscribing to sess: " + Template.list.my_playlist_id);
+if(Template.list.my_playlist_id){
  Meteor.subscribe("links", Template.list.my_playlist_id);
+}*/
 
 /*PART III - EVENT HANDLERS AND REACTIONS BELOW-----------------------------------------------------------------------------------------------*/
 
 //Updates Session vars on new addition.
 Template.list.rendered = function(){
+	console.log("im calling updatelist from rendered");
 	Template.list.updateList();
 }
 
@@ -142,12 +162,28 @@ Template.player.created = function(){
        }
   });
 
-  Template.list.events({
+  /*Template.list.events({
 	'click .destroy' : function (){
+		console.log("about to set this id for deletion: "+this._id);
 		Session.set("to_delete",this._id);	
 		$("#"+Session.get("to_delete")).fadeOut('slow',function(){
 			Links.remove(Session.get("to_delete"));
 			//Links.update({
+		});
+	}
+  });*/
+
+Template.list.events({
+	'click .destroy' : function (){
+		console.log("this: "+this.index);
+		Session.set("to_delete",this.index);	
+		$("#"+Session.get("to_delete")).fadeOut('slow',function(){
+			//Links.remove(Session.get("to_delete"));
+			//Links.update({
+			Meteor.call('delete_record',Template.list.my_playlist_id, Session.get("to_delete"), function(err,message){
+			//alert(err);
+				console.log("err from delete: "+err);
+			});
 		});
 	}
   });
@@ -162,25 +198,33 @@ Template.player.created = function(){
   
   Template.list.my_playlist = function(){
 	//After the deep copy in the routing part of the code, the JQuery will not be relevant.
-	//return Links.find();
+	console.log("myplaylist is called");
+	/*if(Links.findOne({sess: Template.list.my_playlist_id})){
+		return Links.findOne({sess: Template.list.my_playlist_id}).songs;
+	}
+	else{
+		return [];
+	}*/
+	//return Links.find({sess: Template.list.my_playlist_id}, {limit: 1});
+	//return Links.findOne({sess: Template.list.my_playlist_id});
 	return Links.find();
-	//return Links.findOne({sess: Template.list.my_playlist_id}).songs;
-	//return Links.find();
-	//return Links.find();
-	//return Links.find().songs;
+	
   }
   
   Template.player.nav_playlist = function(){
 	return Session.get("current_list");
   }
 
-
+  //when user hits the generate playlist button
   Template.header.events({
 	'click #generate_button': function (evt, template){
 		//bad code below:
 
-	if (Template.list.my_playlist().fetch().length == 0){
+	/*if (Template.list.my_playlist().fetch().length == 0){
 
+		alert('Your tape is empty!');
+	}*/
+	if(Template.list.my_playlist().length == 0){
 		alert('Your tape is empty!');
 	}
 	else{
@@ -224,15 +268,19 @@ Template.player.created = function(){
 	
   });
 
-
 }//End of Client
 
 if (Meteor.isServer) {
   Meteor.startup(function () {
     // code to run on server at startup
+    //console.log("hello");
     Meteor.publish("links", function(sess_var) {
      //console.log("publishing");
-      return Links.findOne({sess:sess_var});  //each client will only have links with that _lastSessionId
+	console.log("sess_var is: "+sess_var);
+     // return Links.findOne({sess:sess_var});  //each client will only have links with that _lastSessionId
+	console.log("the count is: "+Links.find({sess: sess_var}).count());
+	//console.log(Links.find({sess: sess_var}));
+	return Links.find({sess: sess_var});
 	//return Links.find();
 	
     });
@@ -243,10 +291,20 @@ if (Meteor.isServer) {
 (function () {
 Meteor.methods({
 	update_record: function(sessID, songObj){
-		Links.update({sess: sessID}, {$push: {songs: {song_title: songObj["title"], videoId: songObj["video_id"], thumbnail: songObj["thumbnail"]}}});
+		Links.update({sess: sessID}, {$push: {songs: {song_title: songObj["title"], videoId: songObj["video_id"], thumbnail: songObj["thumbnail"], index: songObj["index"]}}});
+		console.log("songs: "+Links.findOne({sess: sessID}).songs.length);
 	},
 	get_count: function(){
 		return Links.find().count();
+	},
+	delete_record: function(sessID, ObjID){
+		console.log("trying to pull object "+ObjID +" from session: "+sessID);
+		Links.update({sess: sessID}, {$pull: {songs: {index: ObjID}}});
+		console.log("remaining songs: "+Links.findOne({sess: sessID}).songs.length);
+		if(Links.findOne({sess: sessID}).songs.length == 0){
+			console.log("list empty, destroying record with id "+sessID);
+			Links.remove({sess: sessID});
+		}
 	}
 });
 }());
